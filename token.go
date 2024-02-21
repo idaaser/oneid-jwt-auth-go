@@ -143,7 +143,7 @@ func (c Config) NewLoginURL(user Userinfo, app string, params ...string) (string
 		return "", err
 	}
 
-	s := strings.ReplaceAll(c.loginBaseURL, `{appType}`, app)
+	s := strings.ReplaceAll(c.loginBaseURL, `{app_type}`, app)
 	u, _ := url.Parse(s)
 	q := u.Query()
 
