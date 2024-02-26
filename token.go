@@ -22,7 +22,7 @@ type Config struct {
 	tokenParam    string
 }
 
-func NewConfig(loginBaseURL string, privateKey string, options ...func(*Config)) (*Config, error) {
+func NewConfig(loginBaseURL, issuer string, privateKey string, options ...func(*Config)) (*Config, error) {
 	parsed, err := parseRSAPrivateKey(privateKey)
 	if err != nil {
 		return nil, err
@@ -37,9 +37,15 @@ func NewConfig(loginBaseURL string, privateKey string, options ...func(*Config))
 		return nil, err
 	}
 
+	issuer = strings.TrimSpace(issuer)
+	if issuer == "" {
+		return nil, errors.New("issuer MUST NOT be empty")
+	}
+
 	c := defaultConfig()
 	c.privateKey = parsed
 	c.loginBaseURL = loginBaseURL
+	c.issuer = issuer
 
 	for _, opt := range options {
 		opt(&c)
@@ -61,12 +67,7 @@ func defaultConfig() Config {
 	}
 }
 
-func WithIssuer(iss string) func(*Config) {
-	return func(c *Config) {
-		c.issuer = iss
-	}
-}
-
+/**
 func WithTokenParam(param string) func(*Config) {
 	return func(c *Config) {
 		if param = strings.TrimSpace(param); param == "" {
@@ -76,7 +77,9 @@ func WithTokenParam(param string) func(*Config) {
 		c.tokenParam = param
 	}
 }
+*/
 
+// WithTokenLifetime 设置id_token的有效期, 单位为秒
 func WithTokenLifetime(sec int) func(*Config) {
 	return func(c *Config) {
 		if sec <= 0 || sec > allowedMaxTokenLifetime {
@@ -93,30 +96,27 @@ func (c Config) NewToken(user Userinfo) (string, error) {
 		return "", err
 	}
 
-	t := openid.New()
+	return c.NewTokenWithClaims(user.asClaims())
+}
 
-	// 写入其他扩展字段
-	for k, v := range user.Extension {
+// NewTokenWithClaims 基于自定义的claims, 生成一个新的id_token
+func (c Config) NewTokenWithClaims(claims map[string]any) (string, error) {
+	if len(claims) == 0 {
+		return "", errors.New("clamis MUST NOT be empty")
+	}
+
+	t := jwt.New()
+
+	for k, v := range claims {
 		if err := t.Set(k, v); err != nil {
 			return "", err
 		}
 	}
 
-	setter := func(claim, value string) {
-		if s := strings.TrimSpace(value); s != "" {
-			_ = t.Set(claim, s)
-		}
-	}
-
 	// 写入其他内置字段
-	setter(openid.IssuerKey, c.issuer)
-
-	// userinfo claim
-	setter(openid.SubjectKey, user.ID)
-	setter(openid.NameKey, user.Name)
-	setter(openid.PreferredUsernameKey, user.PreferredUsername)
-	setter(openid.EmailKey, user.Email)
-	setter(openid.PhoneNumberKey, user.Mobile)
+	if err := t.Set(openid.IssuerKey, c.issuer); err != nil {
+		return "", err
+	}
 
 	// time releated
 	now := time.Now()
@@ -141,6 +141,24 @@ func (c Config) NewLoginURL(user Userinfo, app string, params ...string) (string
 	tok, err := c.NewToken(user)
 	if err != nil {
 		return "", err
+	}
+
+	return c.newLoginURLWithToken(tok, app, params...)
+}
+
+// NewLoginURLWithClaims 给用户创建一个免登应用的url
+func (c Config) NewLoginURLWithClaims(claims map[string]any, app string, params ...string) (string, error) {
+	tok, err := c.NewTokenWithClaims(claims)
+	if err != nil {
+		return "", err
+	}
+
+	return c.newLoginURLWithToken(tok, app, params...)
+}
+
+func (c Config) newLoginURLWithToken(tok string, app string, params ...string) (string, error) {
+	if tok == "" {
+		return "", errors.New("token MUST NOT be empty")
 	}
 
 	s := strings.ReplaceAll(c.loginBaseURL, `{app_type}`, app)
@@ -191,4 +209,26 @@ func (u Userinfo) validate() error {
 	}
 
 	return nil
+}
+
+// asClaims 把用户信息转换为id_token的claims
+func (u Userinfo) asClaims() map[string]any {
+	claims := map[string]any{}
+	for k, v := range u.Extension {
+		claims[k] = v
+	}
+
+	// standard claims
+	setter := func(k, v string) {
+		if v != "" {
+			claims[k] = v
+		}
+	}
+	setter(openid.SubjectKey, u.ID)
+	setter(openid.NameKey, u.Name)
+	setter(openid.PreferredUsernameKey, u.PreferredUsername)
+	setter(openid.EmailKey, u.Email)
+	setter(openid.PhoneNumberKey, u.Mobile)
+
+	return claims
 }
