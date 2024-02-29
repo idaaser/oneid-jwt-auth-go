@@ -1,21 +1,14 @@
 package oneidjwtauth
 
 import (
-	"crypto/x509"
-	"encoding/pem"
-	"fmt"
 	"strings"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func parseRSAPrivateKey(s string) (any, error) {
 	s = normalizeLegacyPrivateKey(s)
-	pemBlock, _ := pem.Decode([]byte(s))
-
-	if pemBlock == nil {
-		return nil, fmt.Errorf("invalid key: %s", s)
-	}
-	// try with pkcs8
-	return x509.ParsePKCS8PrivateKey(pemBlock.Bytes)
+	return ssh.ParseRawPrivateKey([]byte(s))
 }
 
 func normalizeLegacyPrivateKey(s string) string {

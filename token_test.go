@@ -105,3 +105,61 @@ func Test_NewLoginURLWithClaims(t *testing.T) {
 	}
 	fmt.Println(u)
 }
+
+func Test_CreateTokenWithOpenSSHKey(t *testing.T) {
+	opensshKey := `-----BEGIN OPENSSH PRIVATE KEY-----
+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
+-----END OPENSSH PRIVATE KEY-----`
+	c, _ := NewConfig(testLoginBaseURL, testIssuer, opensshKey)
+	claims := map[string]any{
+		"id":      "f99530d4-8317-4900-bd02-0127bb8c44de",
+		"name":    "张三",
+		"gonghao": "123456",
+		"email":   "zhangsan@example.com",
+		"phone":   "+86 13411112222",
+	}
+	tok, err := c.NewTokenWithClaims(claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if tok == "" {
+		t.Fail()
+	}
+	fmt.Println(tok)
+}
