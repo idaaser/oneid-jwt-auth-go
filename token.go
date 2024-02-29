@@ -3,6 +3,7 @@ package oneidjwtauth
 import (
 	"errors"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ type Config struct {
 	tokenParam    string
 }
 
+// NewConfig 初始化jwt认证源配置
 func NewConfig(loginBaseURL, issuer string, privateKey string, options ...func(*Config)) (*Config, error) {
 	parsed, err := parseRSAPrivateKey(privateKey)
 	if err != nil {
@@ -52,6 +54,16 @@ func NewConfig(loginBaseURL, issuer string, privateKey string, options ...func(*
 	}
 
 	return &c, nil
+}
+
+// NewConfigWithKeyFile 初始化jwt认证源配置, 从私钥文件中加载key
+func NewConfigWithKeyFile(loginBaseURL, issuer string, keyFile string, options ...func(*Config)) (*Config, error) {
+	b, err := os.ReadFile(keyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewConfig(loginBaseURL, issuer, string(b), options...)
 }
 
 const (
