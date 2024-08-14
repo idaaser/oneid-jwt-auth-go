@@ -1,4 +1,4 @@
-# oneid-jwt-auth
+# oneid-jwt-auth-go
 oneid jwt auth golang sdk
 
 ## 使用步骤
