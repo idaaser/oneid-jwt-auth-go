@@ -3,6 +3,8 @@ package oneidjwtauth
 import (
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -15,37 +17,30 @@ MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDPwlvSsvsxHHKkRFeMvrBPvfGio2TL
 `
 )
 
-func Test_NewConfig(t *testing.T) {
-	_, err := NewConfig(testLoginBaseURL, testIssuer, testPrivKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+func Test_NewSigner(t *testing.T) {
+	_, err := NewSigner(testLoginBaseURL, testIssuer, testPrivKey)
+	assert.Nil(t, err)
 }
 
 func Test_NewTokenWithUserinfo(t *testing.T) {
-	c, _ := NewConfig(testLoginBaseURL, testIssuer, testPrivKey)
+	c, _ := NewSigner(testLoginBaseURL, testIssuer, testPrivKey)
 	tok, err := c.NewToken(Userinfo{
-		ID:                "f99530d4-8317-4900-bd02-0127bb8c44de",
-		Name:              "张三",
-		PreferredUsername: "zhangsan",
-		Email:             "zhangsan@example.com",
-		Mobile:            "+86 13411112222",
+		ID:       "f99530d4-8317-4900-bd02-0127bb8c44de",
+		Name:     "张三",
+		Username: "zhangsan",
+		Email:    "zhangsan@example.com",
+		Mobile:   "+86 13411112222",
 		Extension: map[string]any{
 			"picture": "https://www.example.com/avatar1.png",
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if tok == "" {
-		t.Fail()
-	}
-	// fmt.Println(tok)
+	assert.Nil(t, err)
+	assert.NotEmpty(t, tok)
+	t.Log(tok)
 }
 
 func Test_NewTokenWithClaims(t *testing.T) {
-	c, _ := NewConfig(testLoginBaseURL, testIssuer, testPrivKey)
+	c, _ := NewSigner(testLoginBaseURL, testIssuer, testPrivKey)
 	claims := map[string]any{
 		"id":      "f99530d4-8317-4900-bd02-0127bb8c44de",
 		"name":    "张三",
@@ -53,7 +48,7 @@ func Test_NewTokenWithClaims(t *testing.T) {
 		"email":   "zhangsan@example.com",
 		"phone":   "+86 13411112222",
 	}
-	tok, err := c.NewTokenWithClaims(claims)
+	tok, err := c.newTokenWithClaims(claims)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,13 +60,13 @@ func Test_NewTokenWithClaims(t *testing.T) {
 }
 
 func Test_NewLoginURL(t *testing.T) {
-	c, _ := NewConfig(testLoginBaseURL, testIssuer, testPrivKey)
+	c, _ := NewSigner(testLoginBaseURL, testIssuer, testPrivKey)
 	u, err := c.NewLoginURL(Userinfo{
-		ID:                "f99530d4-8317-4900-bd02-0127bb8c44de",
-		Name:              "张三",
-		PreferredUsername: "zhangsan",
-		Email:             "zhangsan@example.com",
-		Mobile:            "+86 13411112222",
+		ID:       "f99530d4-8317-4900-bd02-0127bb8c44de",
+		Name:     "张三",
+		Username: "zhangsan",
+		Email:    "zhangsan@example.com",
+		Mobile:   "+86 13411112222",
 		Extension: map[string]any{
 			"picture": "https://www.example.com/avatar1.png",
 		},
@@ -87,7 +82,7 @@ func Test_NewLoginURL(t *testing.T) {
 }
 
 func Test_NewLoginURLWithClaims(t *testing.T) {
-	c, _ := NewConfig(testLoginBaseURL, testIssuer, testPrivKey)
+	c, _ := NewSigner(testLoginBaseURL, testIssuer, testPrivKey)
 	u, err := c.NewLoginURLWithClaims(
 		map[string]any{
 			"id":      "f99530d4-8317-4900-bd02-0127bb8c44de",
@@ -146,7 +141,7 @@ Utr5S0ATzLy0vqDU2+rtneJm4f3Alxe1DQdMAAbdvMK17b7ZoIbH80f3zRs8Q4JQV+ibeO
 CacwgB/lqPHFOTAAAAEWZlbmd4aUBGRU5HWEktTUIwAQ==
 -----END OPENSSH PRIVATE KEY-----
 `
-	c, _ := NewConfig(testLoginBaseURL, testIssuer, opensshKey)
+	c, _ := NewSigner(testLoginBaseURL, testIssuer, opensshKey)
 	claims := map[string]any{
 		"id":      "f99530d4-8317-4900-bd02-0127bb8c44de",
 		"name":    "张三",
@@ -154,7 +149,7 @@ CacwgB/lqPHFOTAAAAEWZlbmd4aUBGRU5HWEktTUIwAQ==
 		"email":   "zhangsan@example.com",
 		"phone":   "+86 13411112222",
 	}
-	tok, err := c.NewTokenWithClaims(claims)
+	tok, err := c.newTokenWithClaims(claims)
 	if err != nil {
 		t.Fatal(err)
 	}

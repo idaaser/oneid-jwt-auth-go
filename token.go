@@ -1,18 +1,21 @@
 package oneidjwtauth
 
 import (
+	"encoding/hex"
 	"errors"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/lestrrat-go/jwx/v2/jwt/openid"
 )
 
-type Config struct {
+// Signer config
+type Signer struct {
 	privateKey any
 
 	loginBaseURL string
@@ -20,11 +23,11 @@ type Config struct {
 	issuer string
 
 	tokenLifetime int // seconds
-	tokenParam    string
+	tokenKey      string
 }
 
-// NewConfig 初始化jwt认证源配置
-func NewConfig(loginBaseURL, issuer string, privateKey string, options ...func(*Config)) (*Config, error) {
+// NewSigner 初始化jwt认证源配置
+func NewSigner(loginBaseURL, issuer string, privateKey string, options ...func(*Signer)) (*Signer, error) {
 	parsed, err := parseRSAPrivateKey(privateKey)
 	if err != nil {
 		return nil, err
@@ -56,45 +59,45 @@ func NewConfig(loginBaseURL, issuer string, privateKey string, options ...func(*
 	return &c, nil
 }
 
-// NewConfigWithKeyFile 初始化jwt认证源配置, 从私钥文件中加载key
-func NewConfigWithKeyFile(loginBaseURL, issuer string, keyFile string, options ...func(*Config)) (*Config, error) {
+// NewSignerWithKeyFile 初始化jwt认证源配置, 从私钥文件中加载key
+func NewSignerWithKeyFile(loginBaseURL, issuer string, keyFile string, options ...func(*Signer)) (*Signer, error) {
 	b, err := os.ReadFile(keyFile)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewConfig(loginBaseURL, issuer, string(b), options...)
+	return NewSigner(loginBaseURL, issuer, string(b), options...)
 }
 
 const (
-	defaultTokenLifetime    = 300  // 5 minutes
-	allowedMaxTokenLifetime = 3600 // 1 hour
+	defaultTokenLifetime    = 300 // 5 minutes
+	allowedMaxTokenLifetime = 300 // 1 hour
 	defaultTokenParam       = "id_token"
 )
 
-func defaultConfig() Config {
-	return Config{
+func defaultConfig() Signer {
+	return Signer{
 		tokenLifetime: defaultTokenLifetime,
-		tokenParam:    defaultTokenParam,
+		tokenKey:      defaultTokenParam,
 	}
 }
 
 /**
-func WithTokenParam(param string) func(*Config) {
-	return func(c *Config) {
+func WithTokenParam(param string) func(*Signer) {
+	return func(c *Signer) {
 		if param = strings.TrimSpace(param); param == "" {
-			c.tokenParam = defaultTokenParam
+			c.tokenKey = defaultTokenParam
 			return
 		}
-		c.tokenParam = param
+		c.tokenKey = param
 	}
 }
 */
 
 // WithTokenLifetime 设置id_token的有效期, 单位为秒
-func WithTokenLifetime(sec int) func(*Config) {
-	return func(c *Config) {
-		if sec <= 0 || sec > allowedMaxTokenLifetime {
+func WithTokenLifetime(sec int) func(*Signer) {
+	return func(c *Signer) {
+		if sec < 0 || sec > allowedMaxTokenLifetime {
 			c.tokenLifetime = defaultTokenLifetime
 			return
 		}
@@ -103,18 +106,18 @@ func WithTokenLifetime(sec int) func(*Config) {
 }
 
 // NewToken 基于用户信息, 生成一个新的id_token
-func (c Config) NewToken(user Userinfo) (string, error) {
+func (c Signer) NewToken(user Userinfo) (string, error) {
 	if err := user.validate(); err != nil {
 		return "", err
 	}
 
-	return c.NewTokenWithClaims(user.asClaims())
+	return c.newTokenWithClaims(user.asClaims())
 }
 
-// NewTokenWithClaims 基于自定义的claims, 生成一个新的id_token
-func (c Config) NewTokenWithClaims(claims map[string]any) (string, error) {
+// newTokenWithClaims 基于自定义的claims, 生成一个新的id_token
+func (c Signer) newTokenWithClaims(claims map[string]any) (string, error) {
 	if len(claims) == 0 {
-		return "", errors.New("clamis MUST NOT be empty")
+		return "", errors.New("claims MUST NOT be empty")
 	}
 
 	t := jwt.New()
@@ -130,13 +133,28 @@ func (c Config) NewTokenWithClaims(claims map[string]any) (string, error) {
 		return "", err
 	}
 
-	// time releated
+	// time related
 	now := time.Now()
 	exp := now.Add(time.Second * time.Duration(c.tokenLifetime))
 	if err := t.Set(openid.IssuedAtKey, now.Unix()); err != nil {
 		return "", err
 	}
 	if err := t.Set(openid.ExpirationKey, exp.Unix()); err != nil {
+		return "", err
+	}
+
+	// set
+	rid, err := uuid.NewRandom()
+	if err != nil {
+		return "", err
+	}
+	ridBytes, _ := rid.MarshalBinary()
+	err = t.Set(openid.JwtIDKey, hex.EncodeToString(ridBytes))
+	if err != nil {
+		return "", err
+	}
+
+	if err = t.Set(openid.AudienceKey, AppTencentOneID); err != nil {
 		return "", err
 	}
 
@@ -149,7 +167,7 @@ func (c Config) NewTokenWithClaims(claims map[string]any) (string, error) {
 }
 
 // NewLoginURL 给用户创建一个免登应用的url
-func (c Config) NewLoginURL(user Userinfo, app string, params ...string) (string, error) {
+func (c Signer) NewLoginURL(user Userinfo, app string, params ...string) (string, error) {
 	tok, err := c.NewToken(user)
 	if err != nil {
 		return "", err
@@ -159,8 +177,8 @@ func (c Config) NewLoginURL(user Userinfo, app string, params ...string) (string
 }
 
 // NewLoginURLWithClaims 给用户创建一个免登应用的url
-func (c Config) NewLoginURLWithClaims(claims map[string]any, app string, params ...string) (string, error) {
-	tok, err := c.NewTokenWithClaims(claims)
+func (c Signer) NewLoginURLWithClaims(claims map[string]any, app string, params ...string) (string, error) {
+	tok, err := c.newTokenWithClaims(claims)
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +186,7 @@ func (c Config) NewLoginURLWithClaims(claims map[string]any, app string, params 
 	return c.newLoginURLWithToken(tok, app, params...)
 }
 
-func (c Config) newLoginURLWithToken(tok string, app string, params ...string) (string, error) {
+func (c Signer) newLoginURLWithToken(tok string, app string, params ...string) (string, error) {
 	if tok == "" {
 		return "", errors.New("token MUST NOT be empty")
 	}
@@ -186,7 +204,7 @@ func (c Config) newLoginURLWithToken(tok string, app string, params ...string) (
 		}
 	}
 
-	q.Set(c.tokenParam, tok)
+	q.Set(c.tokenKey, tok)
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
@@ -198,7 +216,7 @@ type Userinfo struct {
 
 	Name string // 建议填写: 用户显示名
 
-	PreferredUsername string // 建议填写: 登录名
+	Username string // 建议填写: 登录名
 
 	Email string // 选填: 映射到id_token中的email
 
@@ -214,10 +232,10 @@ func (u Userinfo) validate() error {
 	}
 
 	// 三者不能全为空
-	if trim(u.PreferredUsername) == "" &&
+	if trim(u.Username) == "" &&
 		trim(u.Email) == "" &&
 		trim(u.Mobile) == "" {
-		return errors.New("preferred_username/email/mobile MUST NOT all empty")
+		return errors.New("username/email/mobile MUST NOT all empty")
 	}
 
 	return nil
@@ -238,7 +256,7 @@ func (u Userinfo) asClaims() map[string]any {
 	}
 	setter(openid.SubjectKey, u.ID)
 	setter(openid.NameKey, u.Name)
-	setter(openid.PreferredUsernameKey, u.PreferredUsername)
+	setter(openid.PreferredUsernameKey, u.Username)
 	setter(openid.EmailKey, u.Email)
 	setter(openid.PhoneNumberKey, u.Mobile)
 
