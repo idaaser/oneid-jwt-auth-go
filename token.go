@@ -143,7 +143,7 @@ func (c Signer) newTokenWithClaims(claims map[string]any) (string, error) {
 		return "", err
 	}
 
-	// set
+	// set token id as jti claim
 	rid, err := uuid.NewRandom()
 	if err != nil {
 		return "", err
@@ -167,6 +167,8 @@ func (c Signer) newTokenWithClaims(claims map[string]any) (string, error) {
 }
 
 // NewLoginURL 给用户创建一个免登应用的url
+// user表示用户信息, app代表要免登的应用(目前支持的应用见app.go)
+// params表示自定义的key/value键值对(以query param的方式追加到免登链接之后)
 func (c Signer) NewLoginURL(user Userinfo, app string, params ...string) (string, error) {
 	tok, err := c.NewToken(user)
 	if err != nil {
@@ -214,13 +216,13 @@ func (c Signer) newLoginURLWithToken(tok string, app string, params ...string) (
 type Userinfo struct {
 	ID string // 必填: 用户唯一标识, 映射到id_token中的sub
 
-	Name string // 建议填写: 用户显示名
+	Name string // 必须填写: 用户显示名, 映射到id_token中的name
 
-	Username string // 建议填写: 登录名
+	Username string // 建议填写: 登录名, 映射到id_token中的preferred_username
 
-	Email string // 选填: 映射到id_token中的email
+	Email string // 选填: 映射到id_token中的email, 映射到id_token中的email
 
-	Mobile string // 选填: 登录名、邮箱、手机号建议三选一
+	Mobile string // 选填: 登录名、邮箱、手机号建议三选一, 映射到id_token中的phone_number
 
 	Extension map[string]any // 其他需要放到token里的属性
 }
@@ -229,6 +231,10 @@ func (u Userinfo) validate() error {
 	trim := strings.TrimSpace
 	if trim(u.ID) == "" {
 		return errors.New("id MUST NOT be empty")
+	}
+
+	if trim(u.Name) == "" {
+		return errors.New("name MUST NOT be empty")
 	}
 
 	// 三者不能全为空
@@ -250,7 +256,7 @@ func (u Userinfo) asClaims() map[string]any {
 
 	// standard claims
 	setter := func(k, v string) {
-		if v != "" {
+		if v = strings.TrimSpace(v); v != "" {
 			claims[k] = v
 		}
 	}
