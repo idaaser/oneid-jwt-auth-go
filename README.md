@@ -3,7 +3,7 @@ oneid jwt auth golang sdk
 
 ## 使用步骤
 
-1. go.mod里引用sdk: github.com/idaaser/oneid-jwt-auth v1.0.3
+1. go.mod里引用sdk: github.com/idaaser/oneid-jwt-auth v1.0.4
 2. 初始化配置: NewSigner()或 NewSignerWithKeyFile(), 参考token_test.go
 3. 生成免登url: NewLoginURL(userinfo, app, params...), 参数解释如下:
    - userinfo: 免登用户的信息, 见[token.go中Userinfo的定义](./token.go)
