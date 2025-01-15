@@ -7,7 +7,7 @@ oneid jwt auth golang sdk
 2. 初始化配置: NewSigner()或 NewSignerWithKeyFile(), 参考token_test.go
 3. 生成免登url: NewLoginURL(userinfo, app, params...), 参数解释如下:
    - userinfo: 免登用户的信息, 见[token.go中Userinfo的定义](./token.go)
-   - app: 免登用户的唯一标识, 当前支持meeting(腾讯会议), doc(腾讯文档), 详见[app.go](./app.go)
+   - app: 免登应用的唯一标识, 当前支持meeting(腾讯会议), doc(腾讯文档), 详见[app.go](./app.go)
    - params: 表示自定义的key/value键值对(以query param的方式追加到免登链接之后)
 4. 免登url示例:
    - userinfo为: Userinfo{ ID: "f99530d4-8317-4900-bd02-0127bb8c44de", Name: "张三", Username: "zhangsan", Email: "zhangsan@example.com", Mobile: "+86 13411112222"}

@@ -26,8 +26,8 @@ type Signer struct {
 	tokenKey      string
 }
 
-// NewSigner 初始化jwt认证源配置
-func NewSigner(loginBaseURL, issuer string, privateKey string, options ...func(*Signer)) (*Signer, error) {
+// NewSigner 初始化JWT认证签发器
+func NewSigner(privateKey, issuer, loginBaseURL string, options ...func(*Signer) error) (*Signer, error) {
 	parsed, err := parseRSAPrivateKey(privateKey)
 	if err != nil {
 		return nil, err
@@ -53,25 +53,28 @@ func NewSigner(loginBaseURL, issuer string, privateKey string, options ...func(*
 	c.issuer = issuer
 
 	for _, opt := range options {
-		opt(&c)
+		err = opt(&c)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &c, nil
 }
 
-// NewSignerWithKeyFile 初始化jwt认证源配置, 从私钥文件中加载key
-func NewSignerWithKeyFile(loginBaseURL, issuer string, keyFile string, options ...func(*Signer)) (*Signer, error) {
+// NewSignerWithKeyFile 初始化JWT认证签发器, 从私钥文件中加载key
+func NewSignerWithKeyFile(keyFile, issuer, loginBaseURL string, options ...func(*Signer) error) (*Signer, error) {
 	b, err := os.ReadFile(keyFile)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewSigner(loginBaseURL, issuer, string(b), options...)
+	return NewSigner(string(b), issuer, loginBaseURL, options...)
 }
 
 const (
-	defaultTokenLifetime    = 300 // 5 minutes
-	allowedMaxTokenLifetime = 300 // 1 hour
+	defaultTokenLifetime    = 5 * 60 // 单位：秒
+	allowedMaxTokenLifetime = 5 * 60 // 单位：秒
 	defaultTokenParam       = "id_token"
 )
 
@@ -82,31 +85,19 @@ func defaultConfig() Signer {
 	}
 }
 
-/**
-func WithTokenParam(param string) func(*Signer) {
-	return func(c *Signer) {
-		if param = strings.TrimSpace(param); param == "" {
-			c.tokenKey = defaultTokenParam
-			return
-		}
-		c.tokenKey = param
-	}
-}
-*/
-
 // WithTokenLifetime 设置id_token的有效期, 单位为秒
-func WithTokenLifetime(sec int) func(*Signer) {
-	return func(c *Signer) {
+func WithTokenLifetime(sec int) func(*Signer) error {
+	return func(c *Signer) error {
 		if sec < 0 || sec > allowedMaxTokenLifetime {
-			c.tokenLifetime = defaultTokenLifetime
-			return
+			return errors.New("tokenLifetime must less or equal than 300 second")
 		}
 		c.tokenLifetime = sec
+		return nil
 	}
 }
 
-// NewToken 基于用户信息, 生成一个新的id_token
-func (c Signer) NewToken(user Userinfo) (string, error) {
+// newToken 基于用户信息, 生成一个新的id_token
+func (c Signer) newToken(user Userinfo) (string, error) {
 	if err := user.validate(); err != nil {
 		return "", err
 	}
@@ -154,10 +145,6 @@ func (c Signer) newTokenWithClaims(claims map[string]any) (string, error) {
 		return "", err
 	}
 
-	if err = t.Set(openid.AudienceKey, AppTencentOneID); err != nil {
-		return "", err
-	}
-
 	signed, err := jwt.Sign(t, jwt.WithKey(jwa.RS256, c.privateKey))
 	if err != nil {
 		return "", err
@@ -170,17 +157,7 @@ func (c Signer) newTokenWithClaims(claims map[string]any) (string, error) {
 // user表示用户信息, app代表要免登的应用(目前支持的应用见app.go)
 // params表示自定义的key/value键值对(以query param的方式追加到免登链接之后)
 func (c Signer) NewLoginURL(user Userinfo, app string, params ...string) (string, error) {
-	tok, err := c.NewToken(user)
-	if err != nil {
-		return "", err
-	}
-
-	return c.newLoginURLWithToken(tok, app, params...)
-}
-
-// NewLoginURLWithClaims 给用户创建一个免登应用的url
-func (c Signer) NewLoginURLWithClaims(claims map[string]any, app string, params ...string) (string, error) {
-	tok, err := c.newTokenWithClaims(claims)
+	tok, err := c.newToken(user)
 	if err != nil {
 		return "", err
 	}
@@ -214,15 +191,15 @@ func (c Signer) newLoginURLWithToken(tok string, app string, params ...string) (
 
 // Userinfo 代表用户信息
 type Userinfo struct {
-	ID string // 必填: 用户唯一标识, 映射到id_token中的sub
+	ID string // 必填: 用户唯一标识
 
-	Name string // 必须填写: 用户显示名, 映射到id_token中的name
+	Name string // 必须: 用户显示名
 
-	Username string // 建议填写: 登录名, 映射到id_token中的preferred_username
+	Username string // 建议填写: 登录名，1-64个英文字符或数字，登录名、邮箱、手机号三者必须提供一个
 
-	Email string // 选填: 映射到id_token中的email, 映射到id_token中的email
+	Email string // 选填: 邮箱，登录名、邮箱、手机号三者必须提供一个
 
-	Mobile string // 选填: 登录名、邮箱、手机号建议三选一, 映射到id_token中的phone_number
+	Mobile string // 选填: 手机号，登录名、邮箱、手机号三者必须提供一个
 
 	Extension map[string]any // 其他需要放到token里的属性
 }
