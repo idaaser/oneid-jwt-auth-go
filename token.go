@@ -195,11 +195,11 @@ type Userinfo struct {
 
 	Name string // 必须: 用户显示名
 
-	Username string // 建议填写: 登录名，1-64个英文字符或数字，登录名、邮箱、手机号三者必须提供一个
+	Username string // 建议填写: 用户登录名，1-64个英文字符或数字，用户登录名、邮箱、手机号三者必须提供一个
 
-	Email string // 选填: 邮箱，登录名、邮箱、手机号三者必须提供一个
+	Email string // 选填: 邮箱，用户登录名、邮箱、手机号三者必须提供一个
 
-	Mobile string // 选填: 手机号，登录名、邮箱、手机号三者必须提供一个
+	Mobile string // 选填: 手机号，用户登录名、邮箱、手机号三者必须提供一个
 
 	Extension map[string]any // 其他需要放到token里的属性
 }
