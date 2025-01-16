@@ -27,6 +27,10 @@ type Signer struct {
 }
 
 // NewSigner 初始化JWT认证签发器
+// keyFilePath 私钥文件路径
+// issuer 发起登录方的应用标识
+// loginBaseURL OneID JWT认证源页面提供的登录链接
+// options 设置额外属性
 func NewSigner(privateKey, issuer, loginBaseURL string, options ...func(*Signer) error) (*Signer, error) {
 	parsed, err := parseRSAPrivateKey(privateKey)
 	if err != nil {
@@ -63,8 +67,12 @@ func NewSigner(privateKey, issuer, loginBaseURL string, options ...func(*Signer)
 }
 
 // NewSignerWithKeyFile 初始化JWT认证签发器, 从私钥文件中加载key
-func NewSignerWithKeyFile(keyFile, issuer, loginBaseURL string, options ...func(*Signer) error) (*Signer, error) {
-	b, err := os.ReadFile(keyFile)
+// keyFilePath 私钥文件路径
+// issuer 发起登录方的应用标识
+// loginBaseURL OneID JWT认证源页面提供的登录链接
+// options 设置额外属性
+func NewSignerWithKeyFile(keyFilePath, issuer, loginBaseURL string, options ...func(*Signer) error) (*Signer, error) {
+	b, err := os.ReadFile(keyFilePath)
 	if err != nil {
 		return nil, err
 	}
